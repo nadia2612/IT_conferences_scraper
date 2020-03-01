@@ -1,0 +1,125 @@
+use System, Web, Collection, Date, String, ContentType, Document;
+
+function initializeDecorator() {
+	ContentType.decorator("ITConferences", {
+		"title" : {
+			"type" : "STRING",
+			"required" : true
+		},
+		"image" : {
+			"type" : "STRING",
+			"required" : false
+		},
+		"url" : {
+			"type" : "STRING",
+			"required" : false
+		},
+		"start_date" : {
+			"type" : "DATE",
+			"required" : false
+		},
+		"end_date" : {
+			"type" : "DATE",
+			"required" : false
+		},
+		"website" : {
+			"type" : "STRING",
+			"required": false
+		},
+		"description" : {
+			"type" : "STRING",
+			"required": false
+		}
+	});	
+}
+
+function initializeContentType() {
+	ContentType.save("document", ["ITConferences"]);
+}
+
+initializeDecorator();
+initializeContentType();
+
+
+function scrapePage(page, list) {
+    var posts = Web.xPath(page, "//div[contains(@class, 'post event-')]");  //remove 1
+
+    foreach(post in posts) {
+        var eventImage = Web.xPath(post, ".//div[@class='event_img']/a/@href");
+        var eventTitle = Web.xPath(post, ".//h2[@class='entry-title']/a/text()");
+        var eventURL = Web.xPath(post, ".//h2[@class='entry-title']/a/@href");
+        
+         list[Collection.length(list)] = {
+             "image": eventImage,
+             "title": eventTitle,
+             "url": eventURL
+         };
+    }
+}
+
+var page = Web.loadPage("https://www.alltechconferences.com/event/");
+var listOfEvents = [];
+
+var hasNext = true;
+
+while (hasNext) {
+    var nextButton = Web.cssPath(page, "a[href^='https'].next");
+    scrapePage(page, listOfEvents);
+    // hasNext = false;
+    
+    System.print(nextButton);
+    if(nextButton != null){
+        Web.click(nextButton);
+        scrapePage(page,listOfEvents);
+    } else{
+        hasNext = false;
+    }
+}
+
+function parseDate (date) {
+    var day = String.substring(date, 0,2);
+    var month = String.substring(date, 3,5);
+    var year = String.substring(date, 6);
+    
+    return Date.of(year, month, day, 0, 0, 0, 0, "Z");
+}
+    
+
+function scrapeDetailsAndSave(events) {
+    foreach(event in events) {
+        var url = event.url;
+        System.print("Fetching additional information for: " :: url);
+        var detailsPage =  Web.loadPage(url);
+        var strDate = Web.xPath(detailsPage, ".//span[@id='frontend_date_st_date']/text()");
+        var endDate = Web.xPath(detailsPage, ".//span[@id='frontend_date_end_date']/text()");
+        var website = Web.xPath(detailsPage, ".//a[@id='website']/text()");
+        var description = Web.xPath(detailsPage, ".//div[@class='entry-content frontend-entry-content ']/p/text()");
+        var finalDescription = "";
+        foreach(i in description) {
+            finalDescription = finalDescription :: i;
+        }
+    
+        // event["startDate"] = parseDate(strDate); 
+        // event["endDate"] = parseDate(endDate);
+        // event["website"] = website;
+        // event["description"] = description;
+    
+        var document = Document.new("document", {
+    	    "ITConferences" : {
+    	        "title": event["title"],
+    		    "image": event["image"],
+                "url": event["url"],
+                "start_date":parseDate(strDate),
+                "end_date": parseDate(endDate),
+                "website": website,
+                "description": finalDescription
+            }
+        });
+        System.print(document);
+        Document.save(document);
+	}
+}  
+
+scrapeDetailsAndSave(listOfEvents) ;
+System.print(listOfEvents);
+
